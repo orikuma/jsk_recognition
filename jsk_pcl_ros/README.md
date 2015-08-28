@@ -2316,6 +2316,27 @@ Plug the depth sensor which can be launched by openni.launch and run the below c
 roslaunch jsk_pcl_ros tf_transform_cloud.launch
 ```
 
+### jsk\_pcl/TfTransformBoundingBox
+This nodelet will republish bounding box which is transformed with the designated frame_id.
+
+#### Subscribing Topics
+* `~input` (`jsk_recognition_msgs/BoundingBox`)
+
+  input bounding box.
+
+#### Publishing Topics
+* `~output` (`jsk_recognition_msgs/BoundingBox`)
+
+  output bounding box.
+
+#### Parameters
+* `~target_frame_id` (string): The frame_id to transform pointcloud.
+* `~use_latest_tf` (Bool, default: `false`)
+
+  If this parameter is true, ignore timestamp of tf to transform pointcloud.
+* `~tf_queue_size` (Int, default: `10`)
+
+  Queue size of tf message filter to synchronize tf and `~input` topic.
 
 ## Depth Camera Calibration(Kinect,Xtion,Primesense)
 ![](images/depth_calibration.png)
@@ -2589,6 +2610,59 @@ to confirm likelihood function behaves as expected.
 * `~sensor_frame` (default: `odom`)
 
   Frame ID of sensor frame. It is used to compute viewpoint and occlusion.
+
+### jsk\_pcl/ExtractCuboidParticlesTopN
+Extract top-N particles of `pcl::tracking::ParticleCuboid`.
+
+#### Publishing Topics
+* `~output` (`pcl_msgs/PointIndices`)
+
+  Top-N particles indices.
+* `~output/box_array` (`jsk_recognition_msgs/BoundingBoxArray`)
+
+  Top-N particles as BoundingBoxArray.
+
+#### Subscribing Topics
+* `~input` (`sensor_msgs/PointCloud2`)
+
+  Particle cloud of `pcl::tracking::ParticleCuboid`.
+  All the weights are expected to be normalized.
+
+#### Parameters
+* `top_n_ratio` (default: `0.9`)
+
+  Ratio of top-N.
+
+### jsk\_pcl/BoundingBoxOcclusionRejector
+![](images/boundingbox_occlusion_rejector.png)
+Rejects bounding boxes which occludes target object.
+
+sample
+```
+$ roslaunch sample_boundingbox_occlusion_rejector.launch
+```
+
+#### Publishing Topics
+* `~output` (`jsk_recognition_msgs/BoundingBoxArray`)
+
+  Occlusion free candidate bounding boxes.
+* `~output/target_image` (`sensor_msgs/Image`)
+
+  Simulated rendered image of target object.
+* `~output/candidate_image` (`sensor_msgs/Image`)
+
+  Simulated rendered image of candidate object.
+
+#### Subscribing Topics
+* `~input/camera_info` (`sensor_msgs/CameraInfo`)
+
+  CameraInfo of sensor.
+* `~input/target_boxes` (`jsk_recognition_msgs/BoundingBoxArray`)
+
+  BoundingBox array to represent target objects to see.
+* `~input/candidate_boxes` (`jsk_recognition_msgs/BoundingBoxArray`)
+
+  BoundingBox array of candidate poses.
 ### jsk\_pcl/PCDReaderWithPose
 Publish cloud with given pose
 

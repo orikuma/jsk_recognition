@@ -74,6 +74,7 @@ add_service_files(FILES SwitchTopic.srv
 generate_dynamic_reconfigure_options(
   cfg/InteractiveCuboidLikelihood.cfg
   cfg/PlaneSupportedCuboidEstimator.cfg
+  cfg/ExtractParticlesTopNBase.cfg
   cfg/PoseWithCovarianceStampedToGaussianPointCloud.cfg
   cfg/HeightmapMorphologicalFiltering.cfg
   cfg/HeightmapConverter.cfg
@@ -168,6 +169,8 @@ jsk_pcl_nodelet(src/fisheye_sphere_publisher_nodelet.cpp "jsk_pcl/FisheyeSphereP
 #   "jsk_pcl/NodeletImageDEMUX" "image_demux")
 jsk_pcl_nodelet(src/plane_supported_cuboid_estimator_nodelet.cpp
   "jsk_pcl/PlaneSupportedCuboidEstimator" "plane_supported_cuboid_estimator")
+jsk_pcl_nodelet(src/extract_cuboid_particles_top_n_nodelet.cpp
+  "jsk_pcl/ExtractCuboidParticlesTopN" "extract_cuboid_particles_top_n")
 jsk_pcl_nodelet(src/interactive_cuboid_likelihood_nodelet.cpp
   "jsk_pcl/InteractiveCuboidLikelihood" "interactive_cuboid_likelihood")
 jsk_pcl_nodelet(src/image_rotate_nodelet.cpp
@@ -176,6 +179,10 @@ jsk_pcl_nodelet(src/octree_change_publisher_nodelet.cpp
   "jsk_pcl/OctreeChangePublisher" "octree_change_publisher")
 jsk_pcl_nodelet(src/tf_transform_cloud_nodelet.cpp
   "jsk_pcl/TfTransformCloud" "tf_transform_cloud")
+jsk_pcl_nodelet(src/tf_transform_bounding_box_nodelet.cpp
+  "jsk_pcl/TfTransformBoundingBox" "tf_transform_bounding_box")
+jsk_pcl_nodelet(src/tf_transform_bounding_box_array_nodelet.cpp
+  "jsk_pcl/TfTransformBoundingBoxArray" "tf_transform_bounding_box_array")
 jsk_pcl_nodelet(src/color_filter_nodelet.cpp
   "jsk_pcl/RGBColorFilter" "rgb_color_filter")
 jsk_pcl_nodelet(src/color_filter_nodelet.cpp
@@ -306,6 +313,8 @@ jsk_pcl_nodelet(src/normal_direction_filter_nodelet.cpp
   "jsk_pcl/NormalDirectionFilter" "normal_direction_filter")
 jsk_pcl_nodelet(src/attention_clipper_nodelet.cpp
   "jsk_pcl/AttentionClipper" "attention_clipper")
+jsk_pcl_nodelet(src/boundingbox_occlusion_rejector_nodelet.cpp
+  "jsk_pcl/BoundingBoxOcclusionRejector" "boundingbox_occlusion_rejector")
 jsk_pcl_nodelet(src/roi_clipper_nodelet.cpp
   "jsk_pcl/ROIClipper" "roi_clipper")
 jsk_pcl_nodelet(src/point_indices_to_mask_image_nodelet.cpp
@@ -375,6 +384,7 @@ jsk_pcl_nodelet(src/pcd_reader_with_pose_nodelet.cpp
 add_library(jsk_pcl_ros_base SHARED
   src/grid_index.cpp src/grid_map.cpp src/grid_line.cpp src/geo_util.cpp
   src/random_util.cpp
+  src/pcl_ros_util.cpp
   src/pcl_conversion_util.cpp src/pcl_util.cpp
   src/region_adjacency_graph.cpp
   src/tf_listener_singleton.cpp
@@ -400,8 +410,11 @@ add_dependencies(jsk_pcl_ros_base ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 add_dependencies(jsk_pcl_ros_moveit ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 add_executable(bench_ransac_plane_estimation bench/bench_ransac_plane_estimation.cpp)
 target_link_libraries(bench_ransac_plane_estimation jsk_pcl_ros)
+add_executable(sample_cube_nearest_point sample/src/sample_cube_nearest_point.cpp)
+target_link_libraries(sample_cube_nearest_point jsk_pcl_ros_base)
 
 file(GLOB _headers ${PROJECT_SOURCE_DIR}/include/jsk_pcl_ros/*.h)
+list(SORT _headers)
 set(_include_headers "")
 foreach(_header ${_headers})
   string(FIND "${_header}" kinfu IS_KINFU)
@@ -410,6 +423,11 @@ foreach(_header ${_headers})
     set(_include_headers "${_include_headers}#include \"${_header}\"\n")
   endif()
 endforeach()
+execute_process(
+  COMMAND ${PROJECT_SOURCE_DIR}/scripts/build_check_helper.py ${PROJECT_SOURCE_DIR}/jsk_pcl_nodelets.xml
+  OUTPUT_VARIABLE _class_instances
+  )
+
 configure_file(src/build_check.cpp.in build_check.cpp)
 add_executable(build_check build_check.cpp)
 target_link_libraries(build_check jsk_pcl_ros jsk_pcl_ros_base jsk_pcl_ros_util jsk_pcl_ros_moveit)
@@ -418,8 +436,6 @@ generate_messages(DEPENDENCIES
 
 get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
 message("flags: ${CMAKE_CXX_FLAGS}")
-
-
 
 catkin_package(
     DEPENDS pcl

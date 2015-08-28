@@ -32,14 +32,44 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
-#define BOOST_PARAMETER_MAX_ARITY 7
 
-@_include_headers@
-#include <iostream>
+#ifndef JSK_PCL_ROS_CAMERA_DEPTH_SENSOR_H_
+#define JSK_PCL_ROS_CAMERA_DEPTH_SENSOR_H_
 
-int main(int argc, char** argv)
+#include "jsk_pcl_ros/sensor_model/pointcloud_sensor_model.h"
+#include <sensor_msgs/CameraInfo.h>
+#include <image_geometry/pinhole_camera_model.h>
+
+namespace jsk_pcl_ros
 {
-  @_class_instances@
-  std::cout << "Hello World" << std::endl;
-  return 0;
+  class CameraDepthSensor: public PointCloudSensorModel
+  {
+  public:
+    typedef boost::shared_ptr<CameraDepthSensor> Ptr;
+    CameraDepthSensor() {}
+    
+    virtual void setCameraInfo(const sensor_msgs::CameraInfo& info)
+    {
+      model_.fromCameraInfo(info);
+    }
+
+    /**
+     * @brief
+     * Return the expected number of points according to distance and area.
+     * it is calculated according to:
+     * f^2\frac{s}{r^2}
+     **/
+    virtual double expectedPointCloudNum(double distance, double area) const
+    {
+      double f = model_.fx();
+      return f*f / (distance*distance) * area;
+    }
+  protected:
+    image_geometry::PinholeCameraModel model_;
+    
+  private:
+    
+  };
 }
+
+#endif

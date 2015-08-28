@@ -32,14 +32,32 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
-#define BOOST_PARAMETER_MAX_ARITY 7
 
-@_include_headers@
-#include <iostream>
 
-int main(int argc, char** argv)
+/**
+ * This file defines several utilities for pcl <--> ros bridging.
+ */
+
+#ifndef JSK_PCL_ROS_PCL_ROS_UTIL_H_
+#define JSK_PCL_ROS_PCL_ROS_UTIL_H_
+
+#include <ros/ros.h>
+
+#include <std_msgs/Header.h>
+#include <pcl_msgs/PointIndices.h>
+
+#include <pcl/PointIndices.h>
+
+namespace jsk_pcl_ros
 {
-  @_class_instances@
-  std::cout << "Hello World" << std::endl;
-  return 0;
+  /**
+   * @brief
+   * Convert pcl::PointIndices to pcl_msgs::PointIndices
+   * and publish it with overriding header.
+   */
+  void publishPointIndices(ros::Publisher& pub,
+                           const pcl::PointIndices& indices,
+                           const std_msgs::Header& header);
 }
+
+#endif

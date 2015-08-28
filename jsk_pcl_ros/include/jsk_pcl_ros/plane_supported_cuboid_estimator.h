@@ -46,6 +46,8 @@
 #include "jsk_pcl_ros/geo_util.h"
 #include "jsk_pcl_ros/pcl_conversion_util.h"
 #include "jsk_pcl_ros/tf_listener_singleton.h"
+#include <algorithm>
+
 
 // ROS messages
 #include <jsk_recognition_msgs/PolygonArray.h>
@@ -60,6 +62,7 @@
 #include <pcl/tracking/tracking.h>
 #include <pcl/point_cloud.h>
 #include "jsk_pcl_ros/ros_collaborative_particle_filter.h"
+#include <pcl/kdtree/kdtree_flann.h>
 
 namespace pcl
 {
@@ -83,15 +86,35 @@ namespace pcl
         };
         float data_c[8];
       };
-      jsk_pcl_ros::Polygon::Ptr plane;
+      
+      //jsk_pcl_ros::Polygon::Ptr plane;
+      int plane_index;
     };
     
     struct EIGEN_ALIGN16 ParticleCuboid : public _ParticleCuboid
     {
+
+      // Copy constructor
+      inline ParticleCuboid(const ParticleCuboid& obj)
+      {
+        x = obj.x;
+        y = obj.y;
+        z = obj.z;
+        roll = obj.roll;
+        pitch = obj.pitch;
+        yaw = obj.yaw;
+        dx = obj.dx;
+        dy = obj.dy;
+        dz = obj.dz;
+        weight = obj.weight;
+        plane_index = obj.plane_index;
+      }
+      
       inline ParticleCuboid()
       {
         x = y = z = roll = pitch = yaw = dx = dy = dz = weight = 0.0;
         data[3] = 1.0f;
+        plane_index = -1;
       }
       inline ParticleCuboid (float _x, float _y, float _z, float _roll, float _pitch, float _yaw)
       {
@@ -117,9 +140,15 @@ namespace pcl
       {
         x = y = z = roll = pitch = yaw = dx = dy = dz = weight = 0.0;
       }
-      inline float volume()
+      
+      inline float volume() const
       {
         return dx * dy * dz;
+      }
+
+      inline float area() const
+      {
+        return (dx * dy + dy * dz + dz * dx) * 2.0;
       }
 
       static pcl::tracking::ParticleCuboid
@@ -133,7 +162,7 @@ namespace pcl
       }
 
       // a[i]
-      inline float operator [] (unsigned int i)
+      inline float operator [] (unsigned int i) const
       {
         switch (i)
         {
@@ -173,31 +202,52 @@ namespace pcl
         return box;
       }
 
-      inline std::set<int> visibleFaceIndices(const Eigen::Vector3f local_view_point) const
+      inline std::vector<int> visibleFaceIndices(const Eigen::Vector3f local_view_point) const
       {
-        std::set<int> visible_faces;
+        std::vector<int> visible_faces;
+        visible_faces.reserve(3);
         if (local_view_point[0] > 0) {
-          visible_faces.insert(0);
+          visible_faces.push_back(0);
         }
         else if (local_view_point[0] < 0) {
-          visible_faces.insert(2);
+          visible_faces.push_back(2);
         }
         if (local_view_point[1] > 0) {
-          visible_faces.insert(1);
+          visible_faces.push_back(1);
         }
         else if (local_view_point[1] < 0) {
-          visible_faces.insert(3);
+          visible_faces.push_back(3);
         }
         if (local_view_point[2] > 0) {
-          visible_faces.insert(4);
+          visible_faces.push_back(4);
         }
         else if (local_view_point[2] < 0) {
-          visible_faces.insert(5);
+          visible_faces.push_back(5);
         }
         return visible_faces;
       }
 
+      inline double distanceNearestToPlaneWithOcclusion(
+        const Eigen::Vector3f& v,
+        const std::vector<int>& visible_faces) const
+      {
+        double min_distance = DBL_MAX;
+        int nearest_plane_index = nearestPlaneIndex(v);
+        // If the face is visible, use distance-to-plane
+        if (std::find(visible_faces.begin(), visible_faces.end(),
+                      nearest_plane_index)
+            != visible_faces.end()) {
+          return distanceToPlane(v, nearest_plane_index);
+        }
+        else {
+          // If not the face is visible, use distance from centroid
+          // It's an approximated distance.
+          return (getVector3fMap() - v).norm();
+        }
+      }
+      
       // V should be on local coordinates.
+      // TODO: update to take into boundary account
       inline double distanceToPlane(const Eigen::Vector3f& v, const int plane_index) const
       {
         Eigen::Vector3f n;
@@ -273,7 +323,7 @@ namespace pcl
     inline ParticleCuboid operator* (const ParticleCuboid& p, const Eigen::Affine3f& transform)
     {
       Eigen::Affine3f particle_affine = p.toEigenMatrix();
-      Eigen::Affine3f transformed_affine = particle_affine * transform;
+      Eigen::Affine3f transformed_affine = transform * particle_affine;
       ParticleCuboid new_p;
       new_p.x = transformed_affine.translation()[0];
       new_p.y = transformed_affine.translation()[1];
@@ -327,12 +377,53 @@ namespace pcl
     }
     
   } // tracking
+
+  
+  template<>
+  class DefaultPointRepresentation<pcl::tracking::ParticleCuboid>: public PointRepresentation<pcl::tracking::ParticleCuboid>
+  {
+  public:
+    DefaultPointRepresentation()
+    {
+      nr_dimensions_ = 10;
+    }
+
+    virtual void
+    copyToFloatArray (const pcl::tracking::ParticleCuboid &p, float * out) const
+    {
+      for (int i = 0; i < nr_dimensions_; ++i)
+        out[i] = p[i];
+    }
+  };
+  
 } // pcl
+
+// These registration is required to convert
+// pcl::PointCloud<pcl::tracking::ParticleCuboid> to PCLPointCloud2.
+// And pcl::fromROSMsg and pcl::toROSMsg depends on PCLPointCloud2
+// conversions.
+POINT_CLOUD_REGISTER_POINT_STRUCT (pcl::tracking::_ParticleCuboid,
+                                   (float, x, x)
+                                   (float, y, y)
+                                   (float, z, z)
+                                   (float, roll, roll)
+                                   (float, pitch, pitch)
+                                   (float, yaw, yaw)
+                                   (float, dx, dx)
+                                   (float, dy, dy)
+                                   (float, dz, dz)
+                                   (float, weight, weight)
+  )
+POINT_CLOUD_REGISTER_POINT_WRAPPER(pcl::tracking::ParticleCuboid, pcl::tracking::_ParticleCuboid)
 
 namespace jsk_pcl_ros
 {
 
   // Utility function to compute likelihood
+  /**
+   * @brief
+   * return 1.0 if v satisfies min < v < max, return 0 otherwise.
+   */
   inline double binaryLikelihood(double v, double min, double max)
   {
     if (v < min) {
@@ -349,24 +440,25 @@ namespace jsk_pcl_ros
   template <class Config>
   double rangeLikelihood(const pcl::tracking::ParticleCuboid& p,
                          pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud,
+                         const std::vector<Polygon::Ptr>& planes,
                          const Config& config)
   {
     double likelihood = 1.0;
-    if (!p.plane) {
+    Polygon::Ptr plane = planes[p.plane_index];
+    if (p.plane_index == -1) {
       // Do nothing
     }
     else {
       Eigen::Vector3f projected_point;
-      p.plane->project(Eigen::Vector3f(p.getVector3fMap()), projected_point);
-      if (p.plane->isInside(projected_point)) {
+      plane->project(Eigen::Vector3f(p.getVector3fMap()), projected_point);
+      if (plane->isInside(projected_point)) {
         likelihood *= 1.0;
       }
       else {
         likelihood = 0.0;
       }
     }
-    float local_z = p.plane->distanceToPoint(Eigen::Vector3f(p.getVector3fMap()));
-    // ROS_INFO("local_z: %f", local_z);
+    float local_z = plane->distanceToPoint(Eigen::Vector3f(p.getVector3fMap()));
     likelihood *= binaryLikelihood(local_z, config.range_likelihood_local_min_z, config.range_likelihood_local_max_z);
     return likelihood;
   }
@@ -374,10 +466,12 @@ namespace jsk_pcl_ros
   template <class Config>
   double supportPlaneAngularLikelihood(
     const pcl::tracking::ParticleCuboid& p,
+    const std::vector<Polygon::Ptr>& planes,
     const Config& config)
   {
+    Polygon::Ptr plane = planes[p.plane_index];
     if (config.use_support_plane_angular_likelihood) {
-      double cos_likelihood = (p.toEigenMatrix().rotation() * Eigen::Vector3f::UnitZ()).dot(p.plane->getNormal());
+      double cos_likelihood = (p.toEigenMatrix().rotation() * Eigen::Vector3f::UnitZ()).dot(plane->getNormal());
       // ROS_INFO("cos_likelihood: %f", cos_likelihood);
       return pow(std::abs(cos_likelihood),
                  config.support_plane_angular_likelihood_weight_power);
@@ -387,48 +481,75 @@ namespace jsk_pcl_ros
     }
   }
 
+
+  template <class Config>
+  double surfaceAreaLikelihood(
+    const pcl::tracking::ParticleCuboid& p,
+    const Config& config)
+  {
+    if (config.use_surface_area_likelihood) {
+      double v = p.area();
+      return 1.0 / (1.0 + pow(v, config.surface_area_error_power));
+    }
+    else {
+      return 1.0;
+    }
+  }
   
   template <class Config>
   double distanceFromPlaneBasedError(
     const pcl::tracking::ParticleCuboid& p,
     pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud,
+    pcl::KdTreeFLANN<pcl::PointXYZ>& tree,
     const Eigen::Vector3f& viewpoint,
     const Config& config)
   {
     Eigen::Affine3f pose = p.toEigenMatrix();
     Eigen::Affine3f pose_inv = pose.inverse();
-    double error = 1.0;
-    size_t inliers = 0;
     const Eigen::Vector3f local_vp = pose_inv * viewpoint;
-    std::set<int> visible_faces = p.visibleFaceIndices(local_vp);
-    for (size_t i = 0; i < cloud->points.size(); i++) {
-      Eigen::Vector3f v = cloud->points[i].getVector3fMap();
-      Eigen::Vector3f local_v = pose_inv * v;
-      // Brute force
-      if (config.use_occlusion_likelihood) {
-        int nearest_index = p.nearestPlaneIndex(local_v);
-        if (visible_faces.find(nearest_index) != visible_faces.end()) {
-          double d = p.distanceToPlane(local_v, nearest_index);
+    std::vector<int> visible_faces = p.visibleFaceIndices(local_vp);
+    double r = sqrt(p.dx * p.dx + p.dy * p.dy + p.dz * p.dz) / 2.0;
+    std::vector<int> candidate_point_indices;
+    std::vector<float> candidate_point_distances;
+    pcl::PointXYZ xyz_point;
+    xyz_point.getVector3fMap() = p.getVector3fMap();
+    // roughly search near points by kdtree radius search
+    tree.radiusSearch(xyz_point, r + config.outlier_distance, candidate_point_indices, candidate_point_distances);
+    if (candidate_point_indices.size() < config.min_inliers) {
+      return 0;
+    }
+    else {
+      double error = 0.0;
+      size_t inliers = 0;
+      for (size_t i = 0; i < candidate_point_indices.size(); i++) {
+        int index = candidate_point_indices[i];
+        Eigen::Vector3f v = cloud->points[index].getVector3fMap();
+        Eigen::Vector3f local_v = pose_inv * v;
+        
+        if (config.use_occlusion_likelihood) {
+          double d = p.distanceNearestToPlaneWithOcclusion(local_v, visible_faces);
           if (d < config.outlier_distance) {
-            error *= 1 / (1 + pow(d, config.plane_distance_error_power));
+            //error *= 1 / (1 + pow(d, config.plane_distance_error_power));
+            error += pow(d, config.plane_distance_error_power);
+            ++inliers;
+          }
+        }
+        else {
+          double d = p.distanceToPlane(local_v, p.nearestPlaneIndex(local_v));
+          if (d < config.outlier_distance) {
+            //error *= 1 / (1 + pow(d, config.plane_distance_error_power));
+            error += pow(d, config.plane_distance_error_power);
             ++inliers;
           }
         }
       }
-      else {
-        double d = p.distanceToPlane(local_v, p.nearestPlaneIndex(local_v));
-        if (d < config.outlier_distance) {
-          error *= 1 / (1 + pow(d, config.plane_distance_error_power));
-          ++inliers;
-        }
+      // ROS_INFO("inliers: %lu", inliers);
+      if (inliers < config.min_inliers) {
+        return 0;
       }
-    }
-    // ROS_INFO("inliers: %lu", inliers);
-    if (inliers < config.min_inliers) {
-      return 0;
-    }
-    else {
-      return error * inliers;
+      else {
+        return 1 / (1 + error / inliers);
+      }
     }
   }
 
@@ -436,19 +557,23 @@ namespace jsk_pcl_ros
   template <class Config>
   double computeLikelihood(const pcl::tracking::ParticleCuboid& p,
                            pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud,
+                           pcl::KdTreeFLANN<pcl::PointXYZ>& tree,
                            const Eigen::Vector3f& viewpoint,
+                           const std::vector<Polygon::Ptr>& polygons,
                            const Config& config)
   {
     double range_likelihood = 1.0;
     if (config.use_range_likelihood) {
-      range_likelihood = rangeLikelihood(p, cloud, config);
+      range_likelihood = rangeLikelihood(p, cloud, polygons, config);
     }
     //p.weight = std::abs(p.z);
     if (range_likelihood == 0.0) {
      return range_likelihood;
     }
     else {
-      return range_likelihood * distanceFromPlaneBasedError(p, cloud, viewpoint, config) * supportPlaneAngularLikelihood(p, config);
+      return (range_likelihood * distanceFromPlaneBasedError(p, cloud, tree, viewpoint, config)
+              * supportPlaneAngularLikelihood(p, polygons, config)
+              * surfaceAreaLikelihood(p, config));
     }    
   }
   
@@ -475,7 +600,7 @@ namespace jsk_pcl_ros
     virtual void cloudCallback(
       const sensor_msgs::PointCloud2::ConstPtr& msg);
     virtual pcl::PointCloud<pcl::tracking::ParticleCuboid>::Ptr initParticles();
-    virtual size_t chooseUniformRandomPlaneIndex();
+    virtual size_t chooseUniformRandomPlaneIndex(const std::vector<Polygon::Ptr>& polygons);
     virtual void configCallback(Config& config, uint32_t level);
     
     // For particle filtering
@@ -486,9 +611,24 @@ namespace jsk_pcl_ros
     virtual void publishHistogram(ParticleCloud::Ptr particles, int index,
                                   ros::Publisher& pub,
                                   const std_msgs::Header& header);
-    virtual pcl::PointCloud<pcl::PointXYZI>::Ptr convertParticlesToXYZI(ParticleCloud::Ptr particles);
     virtual bool resetCallback(std_srvs::EmptyRequest& req,
                                std_srvs::EmptyResponse& res);
+
+    /**
+     * @brief
+     * Compute the nearest polygon to the particle `p'.
+     */
+    virtual size_t getNearestPolygon(
+      const Particle& p,
+      const std::vector<ConvexPolygon::Ptr>& polygons);
+    /**
+     * @brief
+     * Compute distances between particles and polygons and assing each particle
+     * to the nearest polygon.
+     * This method is called only if the "polygon sensor" measurement is updated.
+     * For simplicity, this method expects convex polygon.
+     */
+    virtual void updateParticlePolygonRelationship(ParticleCloud::Ptr particles);
     boost::mutex mutex_;
     ros::Subscriber sub_cloud_;
     ros::Publisher pub_result_;
@@ -517,6 +657,8 @@ namespace jsk_pcl_ros
     double init_local_position_z_min_;
     double init_local_position_z_max_;
     bool use_init_world_position_z_model_;
+    double init_world_position_z_min_;
+    double init_world_position_z_max_;
     double init_local_orientation_roll_variance_;
     double init_local_orientation_pitch_variance_;
     
@@ -539,15 +681,21 @@ namespace jsk_pcl_ros
     double step_dx_variance_;
     double step_dy_variance_;
     double step_dz_variance_;
+
+    double min_dx_;
+    double min_dy_;
+    double min_dz_;
     
     int particle_num_;
     std::string sensor_frame_;
     boost::mt19937 random_generator_;
     tf::TransformListener* tf_;
     Eigen::Vector3f viewpoint_;
+    bool support_plane_updated_;
     pcl::tracking::ROSCollaborativeParticleFilterTracker<pcl::PointXYZ, pcl::tracking::ParticleCuboid>::Ptr tracker_;
+    std::vector<Polygon::Ptr> polygons_;
+    pcl::KdTreeFLANN<pcl::PointXYZ> tree_;
   private:
-    
   };
 }
 

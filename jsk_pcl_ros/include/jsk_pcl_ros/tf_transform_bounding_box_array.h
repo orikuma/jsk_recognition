@@ -32,14 +32,41 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
-#define BOOST_PARAMETER_MAX_ARITY 7
 
-@_include_headers@
-#include <iostream>
+#ifndef JSK_PCL_ROS_TF_TRANFORM_BOUNDING_BOX_ARRAY_H_
+#define JSK_PCL_ROS_TF_TRANFORM_BOUNDING_BOX_ARRAY_H_
 
-int main(int argc, char** argv)
+
+#include <jsk_topic_tools/diagnostic_nodelet.h>
+#include <jsk_recognition_msgs/BoundingBoxArray.h>
+
+#include "jsk_pcl_ros/tf_listener_singleton.h"
+#include <message_filters/subscriber.h>
+#include <tf/message_filter.h>
+
+namespace jsk_pcl_ros
 {
-  @_class_instances@
-  std::cout << "Hello World" << std::endl;
-  return 0;
+
+  class TfTransformBoundingBoxArray: public jsk_topic_tools::DiagnosticNodelet
+  {
+  public:
+    TfTransformBoundingBoxArray(): DiagnosticNodelet("TfTransformBoundingBoxArray") {}
+  protected:
+    virtual void onInit();
+    virtual void subscribe();
+    virtual void unsubscribe();
+    virtual void transform(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr& msg);
+    
+    ros::Subscriber sub_;
+    message_filters::Subscriber<jsk_recognition_msgs::BoundingBoxArray> sub_filter_;
+    ros::Publisher pub_;
+    std::string target_frame_id_;
+    tf::TransformListener* tf_listener_;
+    boost::shared_ptr<tf::MessageFilter<jsk_recognition_msgs::BoundingBoxArray> > tf_filter_;
+    bool use_latest_tf_;
+    int tf_queue_size_;
+  };
 }
+
+
+#endif

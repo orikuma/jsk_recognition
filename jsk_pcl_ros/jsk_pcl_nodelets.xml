@@ -86,6 +86,10 @@
          type="jsk_pcl_ros::PlaneSupportedCuboidEstimator"
          base_class_type="nodelet::Nodelet">
   </class>
+  <class name="jsk_pcl/ExtractCuboidParticlesTopN"
+         type="jsk_pcl_ros::ExtractCuboidParticlesTopN"
+         base_class_type="nodelet::Nodelet">
+  </class>
   <class name="jsk_pcl/PointCloudLocalization"
          type="jsk_pcl_ros::PointCloudLocalization"
          base_class_type="nodelet::Nodelet">
@@ -186,6 +190,10 @@
          type="jsk_pcl_ros::AttentionClipper"
          base_class_type="nodelet::Nodelet">
     Publish ROI of attention reagion
+  </class>
+  <class name="jsk_pcl/BoundingBoxOcclusionRejector"
+         type="jsk_pcl_ros::BoundingBoxOcclusionRejector"
+         base_class_type="nodelet::Nodelet">
   </class>
   <class name="jsk_pcl/NormalDirectionFilter"
          type="jsk_pcl_ros::NormalDirectionFilter"
@@ -497,6 +505,12 @@
     <description>
       publish transformed cloud with target id
     </description>
+  </class>
+  <class name="jsk_pcl/TfTransformBoundingBox" type="jsk_pcl_ros::TfTransformBoundingBox"
+         base_class_type="nodelet::Nodelet">
+  </class>
+  <class name="jsk_pcl/TfTransformBoundingBoxArray" type="jsk_pcl_ros::TfTransformBoundingBoxArray"
+         base_class_type="nodelet::Nodelet">
   </class>
   <class name="jsk_pcl/ColorizeRandomForest" type="jsk_pcl_ros::ColorizeRandomForest"
          base_class_type="nodelet::Nodelet">

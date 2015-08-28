@@ -32,14 +32,58 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
-#define BOOST_PARAMETER_MAX_ARITY 7
 
-@_include_headers@
-#include <iostream>
 
-int main(int argc, char** argv)
+#ifndef JSK_PCL_ROS_EXTRACT_CUBOID_PARTICLES_TOP_N_BASE_H_
+#define JSK_PCL_ROS_EXTRACT_CUBOID_PARTICLES_TOP_N_BASE_H_
+
+#include <jsk_topic_tools/diagnostic_nodelet.h>
+#include "jsk_pcl_ros/plane_supported_cuboid_estimator.h"
+#include <dynamic_reconfigure/server.h>
+#include <jsk_pcl_ros/ExtractParticlesTopNBaseConfig.h>
+#include <pcl/pcl_base.h>
+#include <pcl/impl/pcl_base.hpp>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/filters/impl/extract_indices.hpp>
+
+#include <jsk_recognition_msgs/BoundingBoxArray.h>
+
+namespace jsk_pcl_ros
 {
-  @_class_instances@
-  std::cout << "Hello World" << std::endl;
-  return 0;
+  template <class PARTICLE_T>
+  bool compareParticleWeight(const PARTICLE_T& a, const PARTICLE_T& b)
+  {
+    return a.weight > b.weight;
+  }
+
+  
+  class ExtractCuboidParticlesTopN: public jsk_topic_tools::DiagnosticNodelet
+  {
+  public:
+    typedef boost::shared_ptr<ExtractCuboidParticlesTopN> Ptr;
+    typedef ExtractParticlesTopNBaseConfig Config;
+    ExtractCuboidParticlesTopN(): DiagnosticNodelet("ExtractCuboidParticlesTopN") {}
+  protected:
+    virtual void onInit();
+    virtual void subscribe();
+    virtual void unsubscribe();
+    virtual void extract(const sensor_msgs::PointCloud2::ConstPtr& msg);
+    virtual void publishBoxArray(
+      const pcl::PointCloud<pcl::tracking::ParticleCuboid>& particles,
+      const std_msgs::Header& header);
+    virtual void configCallback(Config& config, uint32_t level);
+    
+    boost::mutex mutex_;
+    ros::Publisher pub_;
+    ros::Publisher pub_box_array_;
+    ros::Subscriber sub_;
+    boost::shared_ptr<dynamic_reconfigure::Server<Config> > srv_;
+    double top_n_ratio_;
+    
+  private:
+    
+  };
+  
 }
+
+#endif

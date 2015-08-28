@@ -32,14 +32,52 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
-#define BOOST_PARAMETER_MAX_ARITY 7
 
-@_include_headers@
-#include <iostream>
+#ifndef JSK_PCL_ROS_SPINDLE_LASER_SENSOR_H_
+#define JSK_PCL_ROS_SPINDLE_LASER_SENSOR_H_
 
-int main(int argc, char** argv)
+#include "jsk_pcl_ros/sensor_model/pointcloud_sensor_model.h"
+
+namespace jsk_pcl_ros
 {
-  @_class_instances@
-  std::cout << "Hello World" << std::endl;
-  return 0;
+  class SpindleLaserSensor: public PointCloudSensorModel
+  {
+  public:
+    typedef boost::shared_ptr<SpindleLaserSensor> Ptr;
+    
+    SpindleLaserSensor(const double min_angle, const double max_angle,
+                       const size_t point_sample):
+      min_angle_(min_angle), max_angle_(max_angle),
+      point_sample_(point_sample) { }
+    
+    virtual void setSpindleVelocity(const double velocity)
+    {
+      spindle_velocity_ = spindle_velocity;
+    }
+
+    /**
+     * @brief
+     * Return the expected number of points according to distance and area.
+     * it is calculated according to:
+     * \frac{N}{2 \pi \Delta \phi}\frac{1}{r^2}s
+     * \Delta \phi = \frac{2 \pi}{\omega}
+     */
+    virtual double expectedPointCloudNum(double distance, double area) const
+    {
+      assert(spindle_velocity_ != 0.0);
+      double dphi = 2.0 * M_PI / spindle_velocity_;
+      return point_sample_ / (2.0 * M_PI * dphi) / (distance * distance) * area;
+    }
+    
+  protected:
+    
+    double spindle_velocity_;
+    double min_angle_;
+    double max_angle_;
+    size_t point_sample_;
+  private:
+    
+  };
 }
+
+#endif 

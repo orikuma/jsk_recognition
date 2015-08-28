@@ -32,14 +32,19 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
-#define BOOST_PARAMETER_MAX_ARITY 7
 
-@_include_headers@
-#include <iostream>
+#include "jsk_pcl_ros/pcl_ros_util.h"
+#include <pcl_conversions/pcl_conversions.h>
 
-int main(int argc, char** argv)
+namespace jsk_pcl_ros
 {
-  @_class_instances@
-  std::cout << "Hello World" << std::endl;
-  return 0;
+  void publishPointIndices(
+    ros::Publisher& pub, const pcl::PointIndices& indices, const std_msgs::Header& header)
+  {
+    pcl_msgs::PointIndices msg;
+    //pcl_conversions::moveFromPCL does not support const indices
+    msg.indices = indices.indices;
+    msg.header = header;
+    pub.publish(msg);
+  }
 }
