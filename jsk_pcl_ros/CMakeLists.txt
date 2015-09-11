@@ -23,14 +23,8 @@ else()
   set(ML_CLASSIFIERS ml_classifiers) ## hydro and later
 endif()
 
-find_package(PkgConfig)
-pkg_check_modules(yaml_cpp yaml-cpp REQUIRED)
-IF(${yaml_cpp_VERSION} VERSION_LESS "0.5.0")
-## indigo yaml-cpp : 0.5.0 /  hydro yaml-cpp : 0.3.0
-  add_definitions("-DUSE_OLD_YAML")
-ENDIF()
-
 find_package(catkin REQUIRED COMPONENTS
+  jsk_recognition_utils
   dynamic_reconfigure pcl_ros nodelet message_generation genmsg
   ${PCL_MSGS} sensor_msgs geometry_msgs jsk_recognition_msgs
   eigen_conversions tf_conversions tf2_ros tf
@@ -52,6 +46,12 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}
 # For kinfu
 find_package(PCL QUIET COMPONENTS gpu_kinfu_large_scale)
 
+find_package(PkgConfig)
+pkg_check_modules(yaml_cpp yaml-cpp REQUIRED)
+IF(${yaml_cpp_VERSION} VERSION_LESS "0.5.0")
+## indigo yaml-cpp : 0.5.0 /  hydro yaml-cpp : 0.3.0
+  add_definitions("-DUSE_OLD_YAML")
+ENDIF()
 
 add_service_files(FILES SwitchTopic.srv
   UpdateOffset.srv
@@ -72,6 +72,7 @@ add_service_files(FILES SwitchTopic.srv
 
 # generate the dynamic_reconfigure config file
 generate_dynamic_reconfigure_options(
+  cfg/PolygonArrayAreaLikelihood.cfg
   cfg/InteractiveCuboidLikelihood.cfg
   cfg/PlaneSupportedCuboidEstimator.cfg
   cfg/ExtractParticlesTopNBase.cfg
@@ -210,6 +211,12 @@ jsk_pcl_nodelet(src/multi_plane_extraction_nodelet.cpp
   "jsk_pcl/MultiPlaneExtraction" "multi_plane_extraction")
 jsk_pcl_nodelet(src/selected_cluster_publisher_nodelet.cpp
   "jsk_pcl/SelectedClusterPublisher" "selected_cluster_publisher")
+jsk_pcl_util_nodelet(src/polygon_array_distance_likelihood_nodelet.cpp
+  "jsk_pcl/PolygonArrayDistanceLikelihood" "polygon_array_distance_likelihood")
+jsk_pcl_util_nodelet(src/polygon_array_area_likelihood_nodelet.cpp
+  "jsk_pcl/PolygonArrayAreaLikelihood" "polygon_array_area_likelihood")
+jsk_pcl_util_nodelet(src/polygon_array_angle_likelihood_nodelet.cpp
+  "jsk_pcl/PolygonArrayAngleLikelihood" "polygon_array_angle_likelihood")
 jsk_pcl_util_nodelet(src/pose_with_covariance_stamped_to_gaussian_pointcloud_nodelet.cpp
   "jsk_pcl/PoseWithCovarianceStampedToGaussianPointCloud" "pose_with_covariance_stamped_to_gaussian_pointcloud")
 jsk_pcl_util_nodelet(src/spherical_pointcloud_simulator_nodelet.cpp
@@ -382,12 +389,7 @@ jsk_pcl_nodelet(src/pcd_reader_with_pose_nodelet.cpp
   "jsk_pcl/PCDReaderWithPose" "pcd_reader_with_pose")
 
 add_library(jsk_pcl_ros_base SHARED
-  src/grid_index.cpp src/grid_map.cpp src/grid_line.cpp src/geo_util.cpp
-  src/random_util.cpp
-  src/pcl_ros_util.cpp
-  src/pcl_conversion_util.cpp src/pcl_util.cpp
   src/region_adjacency_graph.cpp
-  src/tf_listener_singleton.cpp
   src/viewpoint_sampler.cpp)
 add_library(jsk_pcl_ros_moveit SHARED src/pointcloud_moveit_filter.cpp)
 add_library(jsk_pcl_ros SHARED ${jsk_pcl_nodelet_sources})
@@ -408,10 +410,20 @@ add_dependencies(jsk_pcl_ros ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 add_dependencies(jsk_pcl_ros_util ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 add_dependencies(jsk_pcl_ros_base ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 add_dependencies(jsk_pcl_ros_moveit ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
+
+# bench/ directory
+
 add_executable(bench_ransac_plane_estimation bench/bench_ransac_plane_estimation.cpp)
 target_link_libraries(bench_ransac_plane_estimation jsk_pcl_ros)
+
+# sample/ directory
 add_executable(sample_cube_nearest_point sample/src/sample_cube_nearest_point.cpp)
 target_link_libraries(sample_cube_nearest_point jsk_pcl_ros_base)
+
+# tool/ directory
+add_executable(range_sensor_error_visualization tool/range_sensor_error_visualization.cpp)
+add_executable(depth_camera_error_visualization tool/depth_camera_error_visualization.cpp)
+target_link_libraries(depth_camera_error_visualization jsk_pcl_ros)
 
 file(GLOB _headers ${PROJECT_SOURCE_DIR}/include/jsk_pcl_ros/*.h)
 list(SORT _headers)
@@ -439,7 +451,7 @@ message("flags: ${CMAKE_CXX_FLAGS}")
 
 catkin_package(
     DEPENDS pcl
-    CATKIN_DEPENDS pcl_ros message_runtime ${PCL_MSGS} sensor_msgs geometry_msgs
+    CATKIN_DEPENDS pcl_ros message_runtime ${PCL_MSGS} sensor_msgs geometry_msgs jsk_recognition_msgs jsk_recognition_utils
     INCLUDE_DIRS include
     LIBRARIES jsk_pcl_ros jsk_pcl_ros_base jsk_pcl_ros_util jsk_pcl_ros_moveit
 )
