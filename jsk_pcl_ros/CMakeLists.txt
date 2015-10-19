@@ -73,8 +73,7 @@ add_service_files(FILES SwitchTopic.srv
 # generate the dynamic_reconfigure config file
 generate_dynamic_reconfigure_options(
   cfg/PolygonArrayAreaLikelihood.cfg
-  cfg/InteractiveCuboidLikelihood.cfg
-  cfg/PlaneSupportedCuboidEstimator.cfg
+  cfg/cuboid_parameter.cfg
   cfg/ExtractParticlesTopNBase.cfg
   cfg/PoseWithCovarianceStampedToGaussianPointCloud.cfg
   cfg/HeightmapMorphologicalFiltering.cfg
@@ -132,7 +131,7 @@ generate_dynamic_reconfigure_options(
 find_package(OpenCV REQUIRED core imgproc)
 
 include_directories(include ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
-link_libraries(${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+
 macro(jsk_pcl_nodelet _nodelet_cpp _nodelet_class _single_nodelet_exec_name)
   jsk_nodelet(${_nodelet_cpp} ${_nodelet_class} ${_single_nodelet_exec_name}
     jsk_pcl_nodelet_sources jsk_pcl_nodelet_executables)
@@ -415,6 +414,14 @@ add_dependencies(jsk_pcl_ros_util ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 add_dependencies(jsk_pcl_ros_base ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 add_dependencies(jsk_pcl_ros_moveit ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
 
+target_link_libraries(jsk_pcl_ros_util
+  ${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp
+  jsk_pcl_ros_base)
+target_link_libraries(jsk_pcl_ros_base
+  ${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+target_link_libraries(jsk_pcl_ros_moveit
+  ${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+
 # bench/ directory
 
 add_executable(bench_ransac_plane_estimation bench/bench_ransac_plane_estimation.cpp)
@@ -426,6 +433,7 @@ target_link_libraries(sample_cube_nearest_point jsk_pcl_ros_base)
 
 # tool/ directory
 add_executable(range_sensor_error_visualization tool/range_sensor_error_visualization.cpp)
+target_link_libraries(range_sensor_error_visualization jsk_pcl_ros)
 add_executable(depth_camera_error_visualization tool/depth_camera_error_visualization.cpp)
 target_link_libraries(depth_camera_error_visualization jsk_pcl_ros)
 
