@@ -134,8 +134,47 @@ namespace jsk_pcl_ros
     }
     else if (smooth_method_ == "bilateral") {
       cv::bilateralFilter(input, filtered_image, bilateral_filter_size_, bilateral_sigma_color_, bilateral_sigma_space_);
+    } else if (smooth_method_ == "median") {
+      // cv::medianBlur(input, filtered_image, 5);{
+      filtered_image = input.clone();
+      for (size_t j = 0; j < input.rows; j++) {
+        for (size_t i = 0; i < input.cols; i++) {
+          float v = input.at<float>(j, i);
+          if (isnan(v) || v == -FLT_MAX) { // Need to filter
+            boost::accumulators::accumulator_set<
+              float,
+              boost::accumulators::stats<
+                boost::accumulators::tag::variance,
+                boost::accumulators::tag::count,
+                boost::accumulators::tag::median> > acc;
+            for (int jj = - mask_size_; jj <= mask_size_; jj++) {
+              int target_j = j + jj;
+              if (target_j >= 0 && target_j < input.rows) {
+                for (int ii = - mask_size_; ii <= mask_size_; ii++) {
+                  int target_i = i + ii;
+                  if (target_i >= 0 && target_i < input.cols) {
+                    if (std::abs(jj) + std::abs(ii) <= mask_size_) {
+                      float vv = input.at<float>(target_j, target_i);
+                      if (!isnan(vv) && vv != -FLT_MAX) {
+                        acc(vv);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            if (boost::accumulators::count(acc) != 0) {
+              float newv = boost::accumulators::extract::median(acc);
+              float variance = boost::accumulators::variance(acc);
+              if (variance < max_variance_) {
+                filtered_image.at<float>(j, i) = newv;
+              }
+            }
+          }
+        }
+      }
     }
-    
+
     pub_.publish(cv_bridge::CvImage(
                    msg->header,
                    sensor_msgs::image_encodings::TYPE_32FC2,
