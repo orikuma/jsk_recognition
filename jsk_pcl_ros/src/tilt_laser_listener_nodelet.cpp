@@ -411,6 +411,10 @@ namespace jsk_pcl_ros
     boost::mutex::scoped_lock lock(mutex_);
     for (size_t i = 0; i < msg->name.size(); i++) {
       std::string name = msg->name[i];
+      // remove "/" when it is at the first of joint_name
+      while ( !name.empty() && name.find_first_of("/") == 0 ) {
+	name.erase(name.begin());
+      }
       if (name == joint_name_) {
         vital_checker_->poke();
         if (laser_type_ == TILT_HALF_UP) {
