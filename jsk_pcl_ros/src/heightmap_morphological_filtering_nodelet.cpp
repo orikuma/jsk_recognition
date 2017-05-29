@@ -154,7 +154,7 @@ namespace jsk_pcl_ros
                   int target_i = i + ii;
                   if (target_i >= 0 && target_i < input.cols) {
                     if (std::abs(jj) + std::abs(ii) <= mask_size_) {
-                      float vv = input.at<float>(target_j, target_i);
+                      float vv = input.at<cv::Vec2f>(target_j, target_i)[0];
                       if (!isnan(vv) && vv != -FLT_MAX) {
                         acc(vv);
                       }
@@ -167,7 +167,8 @@ namespace jsk_pcl_ros
               float newv = boost::accumulators::extract::median(acc);
               float variance = boost::accumulators::variance(acc);
               if (variance < max_variance_) {
-                filtered_image.at<float>(j, i) = newv;
+                filtered_image.at<cv::Vec2f>(j, i)[0] = newv;
+                filtered_image.at<cv::Vec2f>(j, i)[1] = variance;
               }
             }
           }
